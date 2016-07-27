@@ -1,0 +1,221 @@
+===================================
+OEP-6: Context-scoped XBlock Fields
+===================================
+
++---------------+-------------------------------------------+
+| OEP           | :doc:`OEP-6 </oeps/oep-0006>`             |
++---------------+-------------------------------------------+
+| Title         | Context-scoped XBlock Fields              |
++---------------+-------------------------------------------+
+| Last Modified | 2016-07-29                                |
++---------------+-------------------------------------------+
+| Author        | Braden MacDonald <braden@opencraft.com>   |
++---------------+-------------------------------------------+
+| Arbiter       |                                           |
++---------------+-------------------------------------------+
+| Status        | Draft                                     |
++---------------+-------------------------------------------+
+| Type          | Architecture                              |
++---------------+-------------------------------------------+
+|  Created      | 2016-07-29                                |
++---------------+-------------------------------------------+
+| `Resolution`  |                                           |
++---------------+-------------------------------------------+
+
+Abstract
+========
+
+There is currently no standard way for XBlocks to define data fields such that content, settings , or user input can be shared among multiple XBlocks within a course. This is a common requirement; for example, an author may wish to specify the default “number of attempts allowed” once for all problems in a course, or a video player XBlock may want to “remember” the user’s preferred video playback speed for videos within a particular course.
+
+In the absence of a formal method for achieving this through the XBlock API, many other solutions have been put in place, such as: adding custom django models to XBlocks, storing fields on the root “course” XBlock, defining inherited fields using InheritanceMixin, using edx-submissions as a generic data store, and more.
+
+This OEP proposes a new mechanism for defining XBlock fields that are explicitly scoped to a particular “context”, such as a course. It is hoped that such a canonical mechanism can provide consistency, improve interoperability, allow new types of behavior to be implemented by XBlocks, and give both authors and learners a simple and flexible way to provide additional control over the learner interactions with XBlocks.
+
+
+Background
+==========
+
+The XBlock API uses the abstract notion of "`scopes`_" to associate each field with particular environment(s) and user(s). A field's ``Scope`` is generally a composite property, defined as the combination of a ``BlockScope``, a ``UserScope``, and a ``name``.
+
+.. _scopes: http://edx.readthedocs.io/projects/xblock/en/latest/fields.html
+
+For reference, the ``UserScope`` can have three values (no changes to these are
+being proposed):
+
+* ``NONE``: data not related any particular user, that does not change while
+  users interact with the XBlock
+* ``ALL``: data not related to any particular user, but which may be modified
+  during user interactions
+* ``ONE``: data related to an individual user
+
+The ``BlockScope`` can have the following values:
+
+* ``USAGE``: "The data is related to a particular use of a block in a course."
+* ``DEFINITION``: "The data is related to the definition of the block" (one block definition can be used multiple times in a course or even among multiple courses).
+* ``TYPE``: "The data is related to all instances of this type of XBlock."
+* ``ALL``: "The data is common to all blocks."
+
+XBlock runtimes would generally not be expected to implement every possible combination of ``BlockScope`` and ``UserScope``. Instead, certain "named scopes" are defined, which are the only scopes that most runtimes support:
+
+The existing named scopes, and an example use case for each, are as follows:
+
+* ``Scope.content`` (UserScope.NONE, BlockScope.DEFINITION):
+
+  * Example: The text of a multiple choice question
+* ``Scope.settings`` (UserScope.NONE, BlockScope.USAGE)
+
+  * Example: The number of attempts allowed for a problem
+* ``Scope.user_state`` (UserScope.ONE, BlockScope.USAGE)
+
+  * Example: The student's answer to a multiple choice question
+* ``Scope.user_state_summary`` (UserScope.ALL, BlockScope.USAGE)
+
+  * Example: The number of students who have answered the question (side note: there is no locking or atomicity for XBlock field writes, so in practice this field is currently of little use in a MOOC)
+* ``Scope.user_info`` (UserScope.ONE, BlockScope.ALL)
+
+  * Example: user age (note: this scope seems little-used and overlaps with the user service)
+* ``Scope.preferences`` (UserScope.ONE, BlockScope.TYPE)
+
+  * Example: (For a video XBlock) Boolean setting to prefer YouTube or non-YouTube video playback.
+
+
+Motivation
+==========
+
+As one would expect, ``Scope.user_info`` and ``Scope.preferences`` fields in the Open edX platform are implemented globally, and not scoped to the course that uses them. There is currently no standard, extensible way to use XBlock fields to store data that is scoped to a particular "context," such as a course, although this is a common need.
+
+
+Specification
+=============
+
+New BlockScope values
+---------------------
+
+To support context-scoped fields, ``BlockScope`` will allow these new additional values:
+
+* ``CONTEXT_TYPE``: The data is related to all instances of this type of XBlock within a particular context.
+* ``CONTEXT_ALL``: The data is accessible to XBlocks of any type, within a particular context. (As with ``BlockScope.ALL``, XBlock authors who use such fields should be careful to use a namespace that will not conflict with ``BlockScope.CONTEXT_ALL`` fields defined by other XBlock authors.)
+
+A "context" is defined by the runtime but is usually a "course" or the nearest equivalent. In the Open edX platform, the context may be a course or a content library. Different runs of the same course would be considered different contexts and would not share data, though UserScope.NONE fields would be copied when creating a new course run. On other platforms, a "context" could be defined as a blog post or a textbook.
+
+New named scopes
+----------------
+
+As is the situtation today, XBlock runtimes would generally not be expected to implement every possible combination of ``BlockScope`` and ``UserScope``. Instead, XBlock runtimes are encouraged to implement these new named scopes, which would be defined in the XBlock python package:
+
+* ``Scope.context_settings`` (UserScope.NONE, BlockScope.CONTEXT_TYPE)
+
+  * Example: For an LTI XBlock, a list of the LTI provider URLs and secrets used in the course
+  * Example: For a discussions XBlock: Enable or disable discussions in this course
+
+* ``Scope.context_shared_settings`` (UserScope.NONE, BlockScope.CONTEXT_ALL)
+
+  * Example: Course-specific defaults that can apply to many different blocks, such as "max_attempts" and "show_answer", which would be consumed by the Capa Problem XBlock, Drag and Drop problem XBlock, Problem Builder XBlock family, etc. (These are currently implemented via ``InheritanceMixin``, which is built-in to edx-platform and does not allow XBlock plugins to extend the list of inherited fields. However, a downside of making them a context-scoped field is that each block would require two field definitions: a ``Scope.settings`` field for the usage-specific value, and a ``Scope.context_shared_settings`` field for the default/fallback value. )
+  * Example: Submission blackout dates - don't allow users to submit answers during the specified time period.
+
+* ``Scope.context_preferences`` (UserScope.ONE, BlockScope.CONTEXT_TYPE)
+
+  * Example: Enable or disable notifications about new discussion posts in this course
+  * Example: Video playback speed for this course
+  * Example: An XBlock in which students "accumulate building blocks over the course of the semester" (PLAT-325)
+
+* ``Scope.context_shared_preferences`` (UserScope.ONE, BlockScope.CONTEXT_ALL)
+
+  * Example: Allow users to self-assign themselves into groups, which affects multiple types of problem XBlock (ORA, Problem Builder)?
+  * This seems to be the least-compelling new Scope, and may be dropped from the proposal if compelling use cases cannot be found.
+
+In the Open edX platform, it is expected that Studio could implement a new UI that displays all ``Scope.context_settings`` and ``Scope.context_shared_settings`` fields from any XBlocks enabled for a given course, allowing authors to configure those settings for that course. Likewise, the LMS could implement a "Preferences" tab for each course that allows students to edit all ``Scope.context_preferences``/``Scope.context_shared_preferences`` fields for XBlocks used in that course. (Though in the future, XBlocks should be able to opt-out of these auto-generated settings UIs on a per-field basis, and instead update those settings via their own UX in views like ``studio_view``, ``student_view``, or the separately proposed ``course_view``. This is expanded upon below in "Open Questions".)
+
+
+Rationale
+=========
+
+Many of the ideas in this proposal are driven by the desire for new types of functionality to be implemented via XBlocks, and thus to be pluggable and easily installed, enabled, or disabled for each Open edX installation or each course.
+
+The idea of naming the new scope "context" comes from other technologies such as LTI, where the term "context" is used analogously. For example, when embedding an LTI tool into the Open edX LMS, the LMS will pass the current course ID as the LTI "context" parameter.
+
+Previous discussions of note include:
+
+* https://openedx.atlassian.net/browse/PLAT-325
+* https://groups.google.com/d/msg/edx-code/ywjXV0wzQiw/FRzaK5nTAgAJ
+* On 2016-07-08, the author met with several stakeholders from edX (Calen Pennington, David Ormsbee, and Robert Raposa) to discuss course-scoped XBlock fields. The discussion tended toward using "context" as an additional dimension (see "Context as a New Scope Dimension" in "Rejected Alternatives"), but we did not think of any use cases for 8 of the 12 additional scopes that would be created by defining an additional dimension.
+
+Other related proposals of note include:
+
+* https://github.com/edx/XBlock/pull/317 - XBlock field sharing
+
+
+Backward Compatibility
+=======================
+
+This OEP introduces a new field scope but does not remove or modify any existing functionality. XBlock authors that add new fields to their XBlock may opt-in to using this feature.
+
+XBlock runtimes may choose to implement context-scoped fields or not. Attempting to access a context-scoped field in a runtime that does not support such fields should simply return the default value of the field. Attempting to modify such a context-scoped field in a runtime that doesn't support such fields should raise an ``InvalidScopeError``.
+
+Some existing XBlocks currently use workarounds for the lack of context-scoped fields, such as storing data in the fields of the root 'course' XBlock. Converting such existing techniques to use context-scoped fields instead would be best achieved with an XBlock data migration API, which currently does not exist and is outside the scope of this OEP (however, see `here`_ for an example implementation).
+
+.. _here: https://github.com/open-craft/problem-builder/blob/c5879dd/problem_builder/v1/xml_changes.py
+
+Details on the current implementation of field scopes in edx-platform can be found in `this gist`_. The `field test XBlock`_ can be used to test how a runtime behaves with different field scopes.
+
+.. _this GIST: https://gist.github.com/bradenmacdonald/b576c59e46af8df9949fa84b3bc7a4b6
+.. _field test XBlock: https://github.com/open-craft/xblock-field-test
+
+Open Questions
+==============
+
+#. How can an XBlock specify whether a context-scoped field should participate
+   in any sort of auto-generated "course preferences" UI (for
+   BlockScope.CONTEXT_TYPE|UserScope.ONE fields) or "course advanced settings"
+   UI (for BlockScope.CONTEXT_TYPE|UserScope.NONE fields)?
+
+   * This may be outside the scope of this OEP, and would best be addressed at
+     the same time as a standard API for definining editor UI options such as
+     ``allow_reset``, ``multiline_editor``, ``list_style``, and
+     ``values_provider`` as implemented in `xblock-utils`_.
+
+#. The current proposal does not support inheritance (i.e. a "context" in the LMS would always be a course, not a "section" or any smaller unit, and field values don't propagate from parent blocks to children), so it is not a replacement for `InheritanceMixin`_. Should it be?
+
+#. Related: Do we need to consider supporting contexts smaller than a course, such as a section or exam? And if so, could that be done in a future chanage, such as adding a non-scope field property to select a context which defaults to "course"?
+
+   * The author's thought on this is that we likely cannot come up with a reasonable proposal to support every possible use case, and it's better to offer simple, flexible, easily understandable support for the main "course" use case now.
+
+#. Should there be a way to define a field such that the runtime will search through a hierarchy of ``BlockScope`` scp[es and use the first value found, such as "check for a ``Scope.settings`` value, then a ``Scope.context_settings`` value"?
+
+.. _xblock-utils: https://github.com/edx/xblock-utils/blob/48fa1a9/xblockutils/studio_editable.py
+.. _InheritanceMixin: https://github.com/edx/edx-platform/blob/46d69eba7ac45/common/lib/xmodule/xmodule/modulestore/inheritance.py#L30
+
+
+Reference Implementation
+========================
+
+TBD. Sample code to implement this feature in the XBlock package and the XBlock SDK/Workbench will be produced once the draft has had some initial scrutiny and feedback.
+
+
+Rejected Alternatives
+=====================
+
+
+Context as a New Scope Dimension
+--------------------------------
+
+Currently, a ``BlockScope``, a ``UserScope``, and a ``name`` are combined to make a Scope for a field. Under this alternative option, a new ``RelevanceScope`` dimension would be added, which could have one of two values: ``ALL`` (default) or ``CONTEXT``. The ``ALL`` value would represent the current XBlock API's definitions, and the ``CONTEXT`` value would mean that the field's relevance is limited to one particular context (e.g. that field's value relates to one particular course.)
+
+The downside of this is that it creates a large matrix/tensor of scopes: 4 BlockScopes × 3 UserScopes × 2 RelevanceScopes = 24 distinct scope types. Not only is this more difficult to understand, but there is no value in defining a "context-specific" version of any ``BlockScope.USAGE`` or ``BlockScope.DEFINITION`` fields. As a result of that and other conflicting or not useful Scope combinations, it is likely that fewer than half of the 24 possible Scope values would be used.
+
+Shared data service
+-------------------
+
+Another alternate option is to create a "shared data" or "course-scoped data" XBlock service that XBlocks can use to read and write data at a course level, rather than making this a new type of field. Such an approach seems less consistent, and would not allow the automatic creationn of a UI for editing context-scoped XBlock settings. (With the field approach, we can replace the "Advanced Settings" page in Studio with an auto-generated UI that allows authors to configure the course-scoped settings of all XBlocks enabled for that course. We can also generate a "preferences" tab in the LMS that allows students to change XBlock preferences for that course.)
+
+
+Copyright
+=========
+
+.. image:: https://i.creativecommons.org/l/by-sa/4.0/88x31.png
+    :alt: Creative Commons License CC-BY-SA
+    :target: http://creativecommons.org/licenses/by-sa/4.0/
+
+This work is licensed under a `Creative Commons Attribution-ShareAlike 4.0 International License`_.
+
+.. _Creative Commons Attribution-ShareAlike 4.0 International License: https://creativecommons.org/licenses/by-sa/4.0/
