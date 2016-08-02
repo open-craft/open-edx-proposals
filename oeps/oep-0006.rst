@@ -7,7 +7,7 @@ OEP-6: Context-scoped XBlock Fields
 +---------------+-------------------------------------------+
 | Title         | Context-scoped XBlock Fields              |
 +---------------+-------------------------------------------+
-| Last Modified | 2016-07-29                                |
+| Last Modified | 2016-08-02                                |
 +---------------+-------------------------------------------+
 | Author        | Braden MacDonald <braden@opencraft.com>   |
 +---------------+-------------------------------------------+
@@ -25,12 +25,13 @@ OEP-6: Context-scoped XBlock Fields
 Abstract
 ========
 
-There is currently no standard way for XBlocks to define data fields such that content, settings , or user input can be shared among multiple XBlocks within a course. This is a common requirement; for example, an author may wish to specify the default “number of attempts allowed” once for all problems in a course, or a video player XBlock may want to “remember” the user’s preferred video playback speed for videos within a particular course.
+There is currently no standard way for XBlocks to define data fields such that content, settings, or user input can be shared among multiple XBlocks within a particular "context" such as a course. Such "course-scoped" or "context-scoped" fields are a common requirement; for example, an author may wish to specify the default “number of attempts allowed” once for all problems in a course, or a video player XBlock may want to “remember” the user’s preferred video playback speed for videos within a particular course.
 
 In the absence of a formal method for achieving this through the XBlock API, many other solutions have been put in place, such as: adding custom django models to XBlocks, storing fields on the root “course” XBlock, defining inherited fields using InheritanceMixin, using edx-submissions as a generic data store, and more.
 
-This OEP proposes a new mechanism for defining XBlock fields that are explicitly scoped to a particular “context”, such as a course. It is hoped that such a canonical mechanism can provide consistency, improve interoperability, allow new types of behavior to be implemented by XBlocks, and give both authors and learners a simple and flexible way to provide additional control over the learner interactions with XBlocks.
+This OEP proposes a new mechanism for defining XBlock fields that are explicitly scoped to a particular context. It is hoped that such a canonical mechanism can provide consistency, improve interoperability, allow new types of behavior to be implemented by XBlocks, and give both authors and learners additional control over learner interactions with XBlocks.
 
+The generic term "context" refers to a course, content library, blog post, or any other place where XBlocks can be used (see "Rationale").
 
 Background
 ==========
