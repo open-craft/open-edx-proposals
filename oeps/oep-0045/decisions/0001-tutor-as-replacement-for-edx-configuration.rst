@@ -197,8 +197,8 @@ This is clearly an area where contributions are needed. It will likely require o
 master and fix breakages, as those would inevitably happen. Continuous deployment and some level of integration testing
 would also be required, as the volunteer(s) would need to be warned as soon as possible about failures.
 
-Close cooperation with the several engineering teams at edX would also need to be campaigned for: it would be best to
-have as much advance warning as possible of backward-incompatible changes coming downstream.
+Close cooperation with the several engineering teams at edX will be needed: it would be best to have advance warning of
+backward-incompatible changes.
 
 
 Criterion 5. Customization
@@ -276,11 +276,17 @@ Omissions
 There is work to be done before it can be considered a full replacement:
 
 -  There must be a documented way to run highly-available, multi-server production deployments, including a way to run
-   automated rolling upgrades with no downtime
--  Migration from the native installation must be documented and/or automated
+   rolling upgrades with as little downtime as possible (see note below)
+-  Migration from the native installation must be documented
 -  It must support deployments of the master branches of edx-platform and IDAs, and once that comes about it must
    undergo CI/CD so that breakages can be dealt with quickly
 -  There should be more than one maintainer
+
+.. note::
+   The nature of Open Releases (Juniper, Koa, etc.) make it very difficult to allow for no-downtime rolling upgrades:
+   they're a mashup of multiple edx.org releases which over the relevant time period introduce backward-incompatible
+   migrations that can't be easily conflated.  It should, however, be possible to do if one is tracking master closely
+   enough.
 
 It is estimated that initial versions of the above will take anywhere from three to six months to achieve, if sufficient
 developers commit resources to the endeavor. (Part of the test of whether a community-supported deployment method will
@@ -293,7 +299,7 @@ Wishlist
 The following would be great to have once the TODO list above is taken care of, as they're not currently present in
 either Tutor or ``edx/configuration``:
 
--  Support the deployment of MFEs
+-  Support the deployment of most MFEs
 -  There should be a way to reuse the same base LMS image with different themes without having to bake them into the
    image
 
@@ -311,11 +317,19 @@ The above decision will be made public in order to garner support for code contr
 Alternatives
 ------------
 
-This document's author could not find another published, open source Open edX deployment project that aims to replace
-``edx/configuration``. While edX is itself moving to `Kubernetes with Helm
-<https://openedx.atlassian.net/wiki/spaces/AC/pages/2107441855/Braindump+on+Configuration+Today+and+Future#Future-with-Containers>`__,
-edX at this time do not intend to make their Helm charts public - though they're open to the idea of publishing and
-maintaining sample versions.
+These are open source Open edX deployment projects that also aim to replace ``edx/configuration``:
+
+-  `Open edX Docker <https://github.com/openfun/openedx-docker>`__: maintained by France Université Numérique, aims to
+   provide a Dockerfile that installs a complete Open edX.  Used in production with OpenShift.
+-  `Derex <https://github.com/Abstract-Tech/derex.runner/>`__: partly based on Tutor, also uses Dockerfiles and
+   ``docker-compose`` do launch Open edX instances.
+
+And it is worth mentioning that:
+
+-  edX itself is moving to `Kubernetes with Helm
+   <https://openedx.atlassian.net/wiki/spaces/AC/pages/2107441855/Braindump+on+Configuration+Today+and+Future#Future-with-Containers>`__,
+   but at this time do not intend to make their Helm charts public - though they're open to the idea of publishing and
+   maintaining sample versions.
 
 
 Appendix
