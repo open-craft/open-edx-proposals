@@ -68,7 +68,7 @@ and a full ``edx/configuration`` run takes close to 2 hours. And with remarkably
    pip install -e .
    tutor local quickstart
 
-By default, this provides, each in a separate Docker (or podman) container:
+By default, this provides, each in a separate Docker container:
 
 -  The LMS
 -  Studio
@@ -80,8 +80,17 @@ By default, this provides, each in a separate Docker (or podman) container:
 -  Redis 6
 -  Elasticsearch 1.5
 -  nginx 1.13
--  Caddy 2.2 (for runtime letsencrypt SSL certificate generation)
+-  Caddy 2.2
 -  An SMTP server
+
+.. note::
+   The above setup is new in Koa, specifically in that:
+
+   - There is no longer a ``memcached`` instance.  Caching is now handles by Redis.
+   - ``uwsgi`` instead of ``gunicorn`` as Python web servers. It serves media and static assets more efficiently.
+   - The addition of Caddy for runtime letsencrypt SSL certificate generation.  (The author has not evaluated it against
+     the Kubernetes-native ``cert-manager``, but this should be done as part of the work in ramping up Kubernetes
+     support.)
 
 And via `officially supported plugins <https://docs.tutor.overhang.io/plugins.html#existing-plugins>`__, one can easily
 add these other official Open edX components:
@@ -91,11 +100,16 @@ add these other official Open edX components:
 -  Notes
 -  Xqueue
 
-Notably absent is any support for deployment of MFEs. Given that not even ``edx/configuration`` currently supports this
-(though there is `a PR <https://github.com/edx/configuration/pull/6128>`__ for it, along with `instructions
-<https://discuss.openedx.org/t/deploying-mfes-in-the-community/2868/22>`__), this shouldn't count against it. In any
-case, the project leadership is `aware of the issue
-<https://discuss.overhang.io/t/work-in-progress-upgrading-tutor-to-koa/1071>`__.
+There is a plugin for deploying the `Gradebook MFE <https://github.com/overhangio/tutor-gradebook/>`__, but so far none
+of the others.  Given that not even ``edx/configuration`` currently supports this (though there is `a PR
+<https://github.com/edx/configuration/pull/6128>`__ for it, along with `instructions
+<https://discuss.openedx.org/t/deploying-mfes-in-the-community/2868/22>`__), this should simply be added to the list of
+things to add to Tutor.
+
+.. note::
+   The problem with MFEs is not deployment: it is theming.  Adding more deployment plugins to Tutor, or maybe creating a
+   general one for MFE deployment, would not be as difficult as first preparing all existing and future MFEs for
+   proper themability.
 
 
 External databases
